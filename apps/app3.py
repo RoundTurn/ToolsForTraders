@@ -1,31 +1,16 @@
-# REQUIRED INSTALLS bisect, dash, datetime, numpy, pandas, plotly
-
-from cmath import nan
-#from datetime import date
 import assets.markdown as dm
-import datetime
-
-#from turtle import width
 import dash_bootstrap_components as dbc
-
-#import numpy as np
-import os
+import datetime
+# import os
 import pandas as pd
-#import plotly.express as px  # (version 4.7.0 or higher)
-#import plotly.graph_objects as go
-#import pytz
 import pathlib
+
+from app import app
 from collections import OrderedDict
 from dash import ctx, Dash, dash_table, dcc, html, Input, Output  # pip install dash (version 2.0.0 or higher)
 from dash.dependencies import Input, Output, State
 
-from app import app
-#app = Dash(__name__, external_stylesheets=external_stylesheets)
-
-
-
 ## Import and clean data.
-#source_1 = 'C:/Users/CM/Documents/Projects/my_site2
 source_1 = './datasets/zn_sample.csv' # <--- file path
 dt_format = '%d/%m/%Y %H:%M' #<-- change if needed
 dateparse = lambda x: datetime.datetime.strptime(x, dt_format)
@@ -60,192 +45,143 @@ tz_options =  ['UTC', 'Europe/London', 'America/Chicago', 'Australia/Sydney', 'A
 #     time_slicer(source, slices, start_date, end_date)
 
 ## Markdown for placement in tabs.
-
 ## Tab layout
 tab1_script = dbc.Card(
-    dbc.CardBody(
-        [
-            html.P(dm.app3_aim, className="card-text"),
-        ]
-    ),
-)
+    dbc.CardBody([
+        html.P(dm.app3_aim, className="card-text"),
+    ]))
 tab2_script = dbc.Card(
-    dbc.CardBody(
-        [
-            html.P(dm.app3_explainer, className="card-text"),
-        ]
-    ),
-)
+    dbc.CardBody([
+        html.P(dm.app3_explainer, className="card-text"),
+    ]))
 
-## App page layout
-layout = dbc.Container(
-    [
-        dbc.Row(
-            dbc.Col(
-                html.H2(
-                    "Time slicing",
-                    className="text-center bg-primary text-white p-2",              
-                ),
-            )
-        ),
-        dbc.Row(
-            [
-                dbc.Col(
-                    [
-                        dbc.Tabs(
-                            [
-                                dbc.Tab(tab1_script, tab_id="one", label="What are we looking at here?", style={'width': 'auto', 'height' : '425px'}),
-                                dbc.Tab(tab2_script, tab_id="two", label="Parameter explainer", style={'width': 'auto', 'height' : '425px'}),
-                            ], active_tab="one"
-                        ),
-                        dbc.Row([
-                            dbc.Col([
-                                html.H5("Execute on single file or multiple files?",
-                                    style={'padding-top': '20px'}),
-                                dcc.RadioItems([
-                                        {'label' : 'Single', 'value': True},
-                                        {'label': 'Multiple', 'value': False}], 
-                                    id= 'whole_folder',
-                                    inline=True,
-                                    value=True,
-                                    style={'height' : '40px'}
-                        ),
-                            ]),
-                            dbc.Col([
-                                html.H5("Enter Location:",
-                                style={'padding-top': '20px', 'padding-bottom': '10px'}),
-                                dcc.Input(id="file_folder_input", type="text", placeholder="", readOnly=True),
-                            ]),
-                        ]),
-                        
-                    ], width='auto', lg=5,
-                ),
-                dbc.Col(
-                    [
-                        dbc.Row([
-                            dbc.Col([
-                                html.H5("Do you require running High / Low?",
-                                    style={'padding-top': '20px'}),
-                                dcc.RadioItems([
-                                        {'label': 'No', 'value': False },
-                                        {'label' : 'Yes', 'value': True }
-                                        ], 
-                                    id= 'hilo_bool',
-                                    value=False,
-                                    inline=True,
-                                    style={'height' : '40px'}
-                                ),
-                            ]),
-                                dbc.Col([
-                                html.H5("Enter running High / Low reset time:",
-                                style={'padding-top': '20px'}),
-                                dcc.Input(id="hilo_time", type="text", placeholder="13:20"),
-                            ]),
-                        ]),
-                        dbc.Row([
-                            dbc.Col([
-                                html.H5("Would you like to specify timezones for the slices?",
-                                    style={'padding-top': '20px'}),
-                                dcc.RadioItems([
-                                        {'label': 'No', 'value': False },
-                                        {'label' : 'Yes', 'value': True }
-                                        ],
-                                    id='tz_bool',
-                                    value=False,
-                                    inline=True,
-                                    style={'height' : '40px'}
-                                ),
-                            ]),
-                            dbc.Col([
-                                html.H5("Base data timezone:",
-                                    style={'padding-top': '20px'}),
-                                dcc.Dropdown(id="base_tz",
-                                    options= [
-                                                {'label': i, 'value': i}
-                                                for i in tz_options
-                                            ],
-                                    clearable=False, multi=False, value=None, placeholder='', disabled=True,
-                                    style={'height' : '40px', 'padding-top': '15px'},
-                                ),
-                            ]),
-                        ]),
-                        html.H5("Select a date range:",
-                            style={'padding-top': '20px'}
-                            ),
-                        dcc.DatePickerRange(
-                            id='slice_range',
-                            min_date_allowed=df.index[0].date().strftime("%Y-%m-%d"),
-                            max_date_allowed=df.index[-1].date().strftime("%Y-%m-%d"),
-                            start_date=df.index[0].date(),
-                            end_date=df.index[-1].date(),
-                            updatemode='singledate',
-                        ),
-                        html.H5("Input required time slices:",
-                            style={'padding-top': '20px'}
-                            ),
-                        dash_table.DataTable(
-                            id='time_slices',
-                            data = input_df.to_dict('records'),
-                            columns=[
-                                {'id': 'Slice', 'name': 'Slice', 'editable': False}, 
-                                {'id': 'Start_time', 'name': 'Start_time(HH:MM)'},
-                                {'id': 'End_time', 'name': 'End_time (HH:MM)'},
-                                {'id': 'Interval', 'name': 'Interval (minutes)'},
-                                {'id': 'Timezone', 'name': 'Timezone', 'presentation': 'dropdown'},
-                            ],
-                            editable = True, 
-                            dropdown ={
-                                'Timezone': {
-                                    'options': [
-                                        {'label': i, 'value': i}
-                                        for i in tz_options
-                                    ]
-                                }
-                            }
-                        ),
-                        html.Div(id='table-dropdown-container'),
-                        html.Div([
-                        html.Button(id='submit_button',                
-                            children='Submit'
-                        )
-                        ]),
-                        dash_table.DataTable(
-                        id='output',
-                        ),
-                        html.Button("Download CSV", id="btn_csv", disabled=True),
-                        dcc.Download(id="download_csv"),
-                        
-                        #html.Iframe(srcDoc="C:/Users/CM/Downloads/BOB_vs_ZN.html",
-                        # html.Iframe(src= 'C:/Users/CM/Documents/Projects/my_site2/assets/BOB_vs_ZN.html',
-                        # html.Iframe(src="test1.pdf",
-                        # #Content-Security-Policy: frame-ancestors 'self',
-                        # style={"height": "1067px", "width": "100%"})
-
-                        # html.Div(
-                        # # html.Iframe(id="embedded-pdf", src="assets/test1.pdf")
-                        # # html.Iframe( src=os.path.join("assets", "test1.pdf"))
-                        # html.Iframe(id="serviceFrameSend", src="../assets/BOB_vs_ZN.html",width="1000", height="1000")
-                        # #src=os.path.join("assets", "test1.pdf")
-
-                        # )
-                    ], width='auto', lg=7,
-                )
-            ]
-        ),
-        dbc.Row(
-            dbc.Col(   
-                 dash_table.DataTable(id='output'),
+## Layout
+layout = dbc.Container([
+    dbc.Row(
+        dbc.Col(
+            html.H2("Time slicing",
+                className="text-center bg-primary text-white p-2",              
             ),
-        ),    
-    ], fluid=True,
-)
-## Callbacks
+        )
+    ),
+    dbc.Row([
+        dbc.Col([
+            dbc.Tabs([
+                dbc.Tab(tab1_script, tab_id="one", label="What are we looking at here?", style={'width': 'auto', 'height' : '425px'}),
+                dbc.Tab(tab2_script, tab_id="two", label="Parameter explainer", style={'width': 'auto', 'height' : '425px'}),
+            ], active_tab="one"),
+            dbc.Row([
+                dbc.Col([
+                    html.H5("Execute on single file or multiple files?",
+                        style={'padding-top': '20px'}),
+                    dcc.RadioItems([
+                            {'label' : 'Single', 'value': True},
+                            {'label': 'Multiple', 'value': False}], 
+                        id= 'whole_folder',
+                        inline=True,
+                        value=True,
+                        style={'height' : '40px'}
+                    )
+                ]),
+                dbc.Col([
+                    html.H5("Enter Location:",
+                    style={'padding-top': '20px', 'padding-bottom': '10px'}),
+                    dcc.Input(id="file_folder_input", type="text", placeholder="", readOnly=True),
+                ]),
+            ]),              
+        ], width='auto', lg=5),
+        dbc.Col([
+            dbc.Row([
+                dbc.Col([
+                    html.H5("Do you require running High / Low?",
+                        style={'padding-top': '20px'}),
+                    dcc.RadioItems([{'label': 'No', 'value': False },
+                                    {'label' : 'Yes', 'value': True }], 
+                        id= 'hilo_bool',
+                        value=False,
+                        inline=True,
+                        style={'height' : '40px'})]),
+                dbc.Col([
+                html.H5("Enter running High / Low reset time:",
+                style={'padding-top': '20px'}),
+                dcc.Input(id="hilo_time", type="text", placeholder="13:20")]),
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.H5("Would you like to specify timezones for the slices?",
+                        style={'padding-top': '20px'}),
+                    dcc.RadioItems([{'label': 'No', 'value': False },
+                                    {'label' : 'Yes', 'value': True }],
+                        id='tz_bool',
+                        value=False,
+                        inline=True,
+                        style={'height' : '40px'})]),
+                dbc.Col([
+                    html.H5("Base data timezone:",
+                        style={'padding-top': '20px'}),
+                    dcc.Dropdown(id="base_tz",
+                        options= [{'label': i, 'value': i}
+                                    for i in tz_options],
+                        clearable=False, multi=False, value=None, placeholder='', disabled=True,
+                        style={'height' : '40px', 'padding-top': '15px'},
+                    )]),
+            ]),
+            html.H5("Select a date range:",
+                style={'padding-top': '20px'}
+                ),
+            dcc.DatePickerRange(
+                id='slice_range',
+                min_date_allowed=df.index[0].date().strftime("%Y-%m-%d"),
+                max_date_allowed=df.index[-1].date().strftime("%Y-%m-%d"),
+                start_date=df.index[0].date(),
+                end_date=df.index[-1].date(),
+                updatemode='singledate',
+            ),
+            html.H5("Input required time slices:",
+                style={'padding-top': '20px'}
+                ),
+            dash_table.DataTable(
+                id='time_slices',
+                data = input_df.to_dict('records'),
+                columns=[
+                    {'id': 'Slice', 'name': 'Slice', 'editable': False}, 
+                    {'id': 'Start_time', 'name': 'Start_time(HH:MM)'},
+                    {'id': 'End_time', 'name': 'End_time (HH:MM)'},
+                    {'id': 'Interval', 'name': 'Interval (minutes)'},
+                    {'id': 'Timezone', 'name': 'Timezone', 'presentation': 'dropdown'},
+                ],
+                editable = True, 
+                dropdown ={
+                    'Timezone': {
+                        'options': [
+                            {'label': i, 'value': i}
+                            for i in tz_options
+                        ]
+                    }
+                }
+            ),
+            html.Div(id='table-dropdown-container'),
+            html.Div([
+                html.Button(id='submit_button', children='Submit')
+            ]),
+            dash_table.DataTable(id='output'),
+            html.Button("Download CSV", id="btn_csv", disabled=True),
+            dcc.Download(id="download_csv"),
+        ], width='auto', lg=7)
+    ]),
+    dbc.Row(
+        dbc.Col(   
+                dash_table.DataTable(id='output')
+        )
+    )    
+], fluid=True)
 
+## Callbacks
 @app.callback(
     Output("btn_csv", 'disabled'),
     Input('output', 'data'),
     State('output', 'data'),
-)
+    )
 def activate_download_button(data, state):
     return True if data == None else False
 

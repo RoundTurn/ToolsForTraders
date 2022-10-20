@@ -103,7 +103,7 @@ layout = dbc.Container([
         dbc.Row(
             dbc.Col(
                 html.H2(
-                    "STIR Visualisation App",
+                    "Constant Maturity STIR Curve Visualisation App",
                     className="text-center bg-primary text-white p-2",              
                 ),
             )
