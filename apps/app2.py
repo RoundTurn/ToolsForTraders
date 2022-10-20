@@ -1,40 +1,31 @@
-# REQUIRED INSTALLS bisect, dash, datetime, numpy, pandas, plotly
-
-import bisect
-import datetime
-
 import assets.markdown as dm
+import bisect
 import dash_bootstrap_components as dbc
+import datetime
 import numpy as np
-import os
 import pandas as pd
 import pathlib
 import plotly.express as px  # (version 4.7.0 or higher)
 import plotly.graph_objects as go
-from dash import Dash, dcc, html, Input, Output  # pip install dash (version 2.0.0 or higher)
-from dash.dependencies import State
 
-#external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
-
-#app = Dash(__name__, external_stylesheets=external_stylesheets)
-#app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 from app import app
+from dash import Dash, dcc, html, Input, Output  # pip install dash (version 2.0.0 or higher)
 
 ## Import and format data
-# file_loc = 'C:/Users/CM/Documents/Projects/my_site2/datasets/my_data_4a.csv'
 dateparse = lambda x: datetime.datetime.strptime(x, '%d/%m/%Y')
 
 PATH = pathlib.Path(__file__).parent
 DATA_PATH = PATH.joinpath("../datasets").resolve()
 
 df = pd.read_csv(DATA_PATH.joinpath("my_data_4a.csv"), 
-                index_col='Date', parse_dates=True, date_parser=dateparse)
+    index_col='Date', parse_dates=True, date_parser=dateparse)
 df.rename(columns={'Date': 'date'}, inplace=True)
 df.columns = [str(pd.to_datetime(col).date()) for col in df.columns]
 cols = df.columns
 df.sort_index(ascending=True, inplace=True)
 
-## Functions to built butterfly structures
+## Functions 
+# To built butterfly structures:
 def fly_builder(df, period):
     adj = period // 3
     cols = df.columns
@@ -46,18 +37,13 @@ def fly_builder(df, period):
     df_out = df_out.round(decimals=4)
     return df_out
 
-## Create a frame for Days To Expiry, DTE for the interpolation. Use Business Days
+## Create a df for Days To Expiry, DTE, for the interpolation. Using Business Days:
 def business_days(df):
     dtes = {}
     for col in df.columns:
         col_date = pd.to_datetime(col).date()
         dtes[col] = [np.busday_count(date.date(), col_date) for date in df.index]
     return pd.DataFrame(dtes, index=df.index)
-
-df_days = business_days(df)
-
-## Create a list of the DTE for the current contracts
-latest_dtes = list(df_days.iloc[-1].values)
 
 ## Interpolating the data
 def interpolation(dte_df, prices_df, days, lookback):
@@ -69,15 +55,13 @@ def interpolation(dte_df, prices_df, days, lookback):
     for ts, row in dte_df[-lookback:].iterrows():
         l = bisect.bisect_left(row.tolist(), days) - 1 # when l == 0, this wraps to -1. Catch **below**.
         r = bisect.bisect_right(row.tolist(), days)
-
         try: 
             l_col = dte_df.columns[l]
             r_col = dte_df.columns[r]
         except IndexError:
             if row[-1] == days:  # Catch the single edge-case where bisect_right "is" the 'days' in last col.
                 dic[ts] = prices_df.loc[ts, dte_df.columns[-1]]
-            break
-            
+            break    
         if (r - l) > 1:  # When moving over columns and "days" is exactly on the column.
             dic[ts] = prices_df.loc[ts, dte_df.columns[l + 1]]
         elif (dte_df.loc[ts, l_col] > 0)  and (l >= 0):   # **Catching the wrap around**.
@@ -85,8 +69,7 @@ def interpolation(dte_df, prices_df, days, lookback):
             r_price = prices_df.loc[ts, r_col]
             diff = r_price - l_price
             adj = ((days - row[l]) / (row[r] - row[l])) * diff
-            dic[ts] = prices_df.loc[ts, l_col] + adj
-            
+            dic[ts] = prices_df.loc[ts, l_col] + adj     
     return pd.Series(dic, name=days, dtype='float64')
         
 ## Create a frame of interpolated prices based on latest DTEs of current STIR contracts
@@ -96,30 +79,27 @@ def strat_builder(*args):
         holder[a] = interpolation(df_days, df, a, 500)
     return pd.DataFrame(holder)
 
+## Create the data we need
+# Business days to expiry 
+df_days = business_days(df)
+# List of the DTE for latest prices
+latest_dtes = list(df_days.iloc[-1].values)
+# Interpolate
 interpolated_prices = strat_builder(*latest_dtes)
 
-## Create tabs
+## Create tabs for layout
 tab1_script = dbc.Card(
-    dbc.CardBody(
-        [
-            html.P(dm.app2_aim, className="card-text"),
-        ]
-    ),
-    #className="mt-3",
-)
+    dbc.CardBody([
+        html.P(dm.app2_aim, className="card-text"),
+    ]))
 
 tab2_script = dbc.Card(
-    dbc.CardBody(
-        [
-           html.P(dm.app2_explainer, className="card-text"),
-        ]
-    ),
-    #className="mt-3",
-)
+    dbc.CardBody([
+        html.P(dm.app2_explainer, className="card-text"),
+    ]))
 
 ## Built the layout
-layout = dbc.Container(
-    [
+layout = dbc.Container([
         dbc.Row(
             dbc.Col(
                 html.H2(
@@ -128,59 +108,48 @@ layout = dbc.Container(
                 ),
             )
         ),
-        dbc.Row(
-[
-                dbc.Col([
-                        dbc.Tabs(
-                            [
-                                dbc.Tab(tab1_script, tab_id="one", label="What are we looking at here?", style={'width': 'auto', 'height' : '425px'}),
-                                dbc.Tab(tab2_script, tab_id="two", label="Parameter selection", style={'width': 'auto', 'height' : '425px'}),
-                            ], active_tab="one"
-                        ),
-                        html.H5("1. Set the butterfly leg span:",
-                            style={'padding-top': '20px'}),
-                        dcc.Dropdown(id="Butterfly_leg_gap",
-                            options=[
-                            {"label": "3-month", "value": 3},
-                            {"label": "6-month", "value": 6},
-                            {"label": "9-month", "value": 9},
-                            {"label": "12-month", "value": 12}],
-                            clearable=False, multi=False, value=3,
-                            style={'height' : '40px'}#, 'padding-top': '20px'}
-                            # style={'width': 'auto', 'padding-top': '20px'}
-                        ),
-                        html.H5("2. Click on a data point to select that butterfly:",
-                            style={'padding-top': '20px'}),
-                        dcc.Graph(id='std_chart', figure={}, config={'displayModeBar':False}),
-                    ], width='auto', lg=5,
-                ),
-                dbc.Col([
-                        html.H5("3. Choose how many days of data you'd like to see:",
-                           style={'padding-top': '20px'}),
-                        dcc.Slider(id='lookback_days',
-                                    min=0, max=250, 
-                                    updatemode = 'mouseup',
-                                    tooltip={"placement": "top", "always_visible": True},
-                                    #marks = {i: f'Lookback days : {i}' if i==10 else str(i) for i in range(10, len(df), 10)},
-                                    value= 100,
-                                    #step= 5,
-                                    ), # style={'width': '20%', 'padding': '0px 20px 20px 20px'}
-                        dcc.Graph(id='scatter_outright', figure={}),
-                        html.H5("4. Check the structure at +/- 3 months:",
-                           style={'padding-top': '20px'}),
-                        dcc.Graph(id='rolldown'),
-                        html.Hr(),
+        dbc.Row([
+            dbc.Col([
+                dbc.Tabs([
+                    dbc.Tab(tab1_script, tab_id="one", label="What are we looking at here?", 
+                        style={'width': 'auto', 'height' : '425px'}),
+                    dbc.Tab(tab2_script, tab_id="two", label="Parameter selection", 
+                        style={'width': 'auto', 'height' : '425px'}),
+                ], active_tab="one"),
+                html.H5("1. Set the butterfly leg span:", style={'padding-top': '20px'}),
+                dcc.Dropdown(id="Butterfly_leg_gap", options=[
+                    {"label": "3-month", "value": 3},
+                    {"label": "6-month", "value": 6},
+                    {"label": "9-month", "value": 9},
+                    {"label": "12-month", "value": 12}],
+                    clearable=False, multi=False, value=3,
+                    style={'height' : '40px'}),
+                html.H5("2. Click on a data point to select that butterfly:",
+                style={'padding-top': '20px'}),
+                dcc.Graph(id='fly_chart', figure={}, config={'displayModeBar':False}),
+            ], width='auto', lg=5),
+            dbc.Col([
+                html.H5("3. Choose how many days of data you'd like to see:",
+                    style={'padding-top': '20px'}),
+                dcc.Slider(id='lookback_days',
+                    min=0, max=250, 
+                    updatemode = 'mouseup',
+                    tooltip={"placement": "top", "always_visible": True},
+                    value= 100,
+                    ),
+                dcc.Graph(id='scatter_outright', figure={}),
+                html.H5("4. Check the structure at +/- 3 months:",
+                    style={'padding-top': '20px'}),
+                dcc.Graph(id='rolldown'),
+                html.Hr(),
                         
-                    ], width='auto', lg=7,
-                )
-            ]
-        ),        
-    ], fluid=True,
-)
+            ], width='auto', lg=7)
+        ]),        
+    ], fluid=True)
 
 ## Callbacks
 @app.callback(
-    Output(component_id='std_chart', component_property='figure'),#],
+    Output(component_id='fly_chart', component_property='figure'),
     Input(component_id='Butterfly_leg_gap', component_property='value')
 )
 def update_graph(option_slctd1):
@@ -196,7 +165,7 @@ def update_graph(option_slctd1):
 @app.callback(
     Output(component_id='scatter_outright', component_property='figure'),
     Output(component_id='rolldown', component_property='figure'),
-    Input(component_id='std_chart', component_property='clickData'),
+    Input(component_id='fly_chart', component_property='clickData'),
     Input(component_id='Butterfly_leg_gap', component_property='value'),
     Input(component_id='lookback_days', component_property='value')
 )
